@@ -1,5 +1,3 @@
-# Here is the adapted code for the 'NV' feature
-
 import torch
 import os
 import sys
@@ -11,6 +9,13 @@ import comfy.model_management
 import comfy.sample
 
 MAX_RESOLUTION=8192
+
+def prepare_mask(mask, shape):
+    mask = torch.nn.functional.interpolate(mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])), size=(shape[2], shape[3]), mode="bilinear")
+    mask = mask.expand((-1,shape[1],-1,-1))
+    if mask.shape[0] < shape[0]:
+        mask = mask.repeat((shape[0] -1) // mask.shape[0] + 1, 1, 1, 1)[:shape[0]]
+    return mask
 
 class NoisyLatentImage:
     @classmethod
