@@ -1,7 +1,9 @@
-import torch
+# Here is the adapted code for the 'NV' feature
 
+import torch
 import os
 import sys
+from . import rng_philox
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "comfy"))
 
@@ -10,18 +12,11 @@ import comfy.sample
 
 MAX_RESOLUTION=8192
 
-def prepare_mask(mask, shape):
-    mask = torch.nn.functional.interpolate(mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])), size=(shape[2], shape[3]), mode="bilinear")
-    mask = mask.expand((-1,shape[1],-1,-1))
-    if mask.shape[0] < shape[0]:
-        mask = mask.repeat((shape[0] -1) // mask.shape[0] + 1, 1, 1, 1)[:shape[0]]
-    return mask
-
 class NoisyLatentImage:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "source":(["CPU", "GPU"], ),
+            "source":(["CPU", "GPU", "NV"], ),  # Add "NV" as a new source
             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             "width": ("INT", {"default": 512, "min": 64, "max": MAX_RESOLUTION, "step": 8}),
             "height": ("INT", {"default": 512, "min": 64, "max": MAX_RESOLUTION, "step": 8}),
@@ -33,11 +28,21 @@ class NoisyLatentImage:
     CATEGORY = "latent/noise"
         
     def create_noisy_latents(self, source, seed, width, height, batch_size):
-        torch.manual_seed(seed)
+    
+#        torch.manual_seed(seed)
         if source == "CPU":
             device = "cpu"
+            torch.manual_seed(seed)
+        elif source == "GPU":
+            device = comfy.model_management.get_torch_device()
+            torch.manual_seed(seed)
+        elif source == "NV":  # Add a new condition for "NV" source
+            device = "cpu"
+            rng_philox.Generator(seed)
+            noise = torch.randn((batch_size,  4, height // 8, width // 8), dtype=torch.float32, device=device).cpu()
         else:
             device = comfy.model_management.get_torch_device()
+            torch.manual_seed(seed)
         noise = torch.randn((batch_size,  4, height // 8, width // 8), dtype=torch.float32, device=device).cpu()
         return ({"samples":noise}, )
 
